@@ -1,4 +1,4 @@
-import { check } from "k6";
+import {check} from "k6";
 import http from "k6/http";
 
 export const options = {
@@ -33,7 +33,7 @@ export function testGetRedirect(shortLink, longurl) {
 }
 
 export default function () {
-  const longurl = `https://www.google.com/?q=vu%20${__VU},iter%20${__ITER}`;
+  const longurl = `https://www.google.com/?q=vu.${__VU}-iter.${__ITER}`;
   var r = testCreate(longurl);
   const shortLink = r.json('link');
   testGetRedirect(shortLink, longurl)

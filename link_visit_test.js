@@ -1,5 +1,5 @@
-import { check } from "k6";
-import { Trend } from "k6/metrics";
+import {check} from "k6";
+import {Trend} from "k6/metrics";
 import http from "k6/http";
 
 export let CreateTrendRTT = new Trend("RTT create short link");
@@ -7,7 +7,7 @@ export let GetShortLinkTrendRTT = new Trend("RTT get short link");
 export let GetStatsTrendRTT = new Trend("RTT get stats");
 
 export const options = {
-  stages: [{ duration: "1m", target: 100 }],
+  stages: [{duration: "1m", target: 100}],
   thresholds: {
     iterations: ["rate > 100"],
   },
@@ -60,7 +60,7 @@ function random(min, max) {
 }
 
 export default function () {
-  const longurl = `https://www.google.com/?q=vu${__ENV["UNIQUE"]}${__VU},iter${__ITER}`;
+  const longurl = `https://www.google.com/?q=vu.${__ENV["UNIQUE"]}${__VU}-iter.${__ITER}`;
 
   const requestsCount = random(300, 500);
 

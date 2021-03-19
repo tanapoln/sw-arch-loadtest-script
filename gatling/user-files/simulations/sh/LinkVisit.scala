@@ -4,8 +4,9 @@ import io.gatling.core.Predef._
 import io.gatling.core.feeder.Feeder
 import io.gatling.http.Predef._
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingDeque}
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -17,11 +18,12 @@ case class Link(val longURL: String, val link: String, val counter: AtomicLong) 
 }
 
 object CustomFeeders {
+  val MaxNumberOfLink = 4
   val count = new AtomicLong()
-  val maxLink = new AtomicLong(500)
+  val maxLink = new AtomicLong(MaxNumberOfLink)
 
   val shortenLink = new ConcurrentHashMap[String, AtomicLong]()
-  val links = new LinkedBlockingDeque[Link]()
+  val links = new ArrayBuffer[Link]()
 
   def uniq(): Feeder[String] = {
     return Iterator.continually(
@@ -39,21 +41,28 @@ object CustomFeeders {
     val c = new AtomicLong()
     val oc = shortenLink.putIfAbsent(link, c)
     if (oc == null) {
-      links.offerLast(Link(longURL, link, c))
+      links.synchronized {
+        links.addOne(Link(longURL, link, c))
+      }
     }
   }
 }
 
-class CircularLinksFeeder extends Feeder[Link] {
+class RandomLinksFeeder extends Feeder[Link] {
   override def hasNext: scala.Boolean = true
 
   override def next(): Map[String, Link] = {
-    val l = CustomFeeders.links.takeFirst()
-    CustomFeeders.links.putLast(l)
+    val links = CustomFeeders.links
 
-    Map(
-      "data" -> l
-    )
+    while (links.isEmpty) {
+      Thread.sleep(100)
+    }
+
+    links.synchronized {
+      Map(
+        "data" -> links(Random.nextInt(links.length))
+      )
+    }
   }
 }
 
@@ -61,10 +70,18 @@ class LinksFeeder extends Feeder[Option[Link]] {
   override def hasNext: scala.Boolean = true
 
   override def next(): Map[String, Option[Link]] = {
-    val link = Option(CustomFeeders.links.pollFirst())
-    Map(
-      "data" -> link
-    )
+    val links = CustomFeeders.links
+    links.synchronized {
+      if (links.isEmpty) {
+        Map(
+          "data" -> Option.empty[Link]
+        )
+      } else {
+        Map(
+          "data" -> Option(links.remove(0))
+        )
+      }
+    }
   }
 }
 
@@ -105,23 +122,25 @@ class ShortenSimulation extends Simulation {
     }
 
   val visitScene = scenario("visit link")
-    .feed(new CircularLinksFeeder())
-    .exec { session =>
-      val l = session("data").as[Link]
-      session.set("link", l.getAndCount()) //session immutable
-        .set("longURL", l.longURL)
+    .repeat(10) {
+      feed(new RandomLinksFeeder())
+        .exec { session =>
+          val l = session("data").as[Link]
+          session.set("link", l.getAndCount()) //session immutable
+            .set("longURL", l.longURL)
+        }
+        .exec { session =>
+          //      println("Setting visit link data:" + session)
+          session
+        }
+        .exec(
+          http("visit")
+            .get("${link}")
+            .disableFollowRedirect
+            .check(status.is(302))
+            .check(header("Location").is("${longURL}"))
+        )
     }
-    .exec { session =>
-      //      println("Setting visit link data:" + session)
-      session
-    }
-    .exec(
-      http("visit")
-        .get("${link}")
-        .disableFollowRedirect
-        .check(status.is(302))
-        .check(header("Location").is("${longURL}"))
-    )
 
   val validateScene = scenario("validate stats")
     .doWhile("${available}") {
@@ -153,7 +172,7 @@ class ShortenSimulation extends Simulation {
       constantConcurrentUsers(Integer.getInteger("load.visit", 5)) during (Integer.getInteger("load.visit.duration", 10) seconds)
     ).andThen(
       validateScene.inject(
-        atOnceUsers(50)
+        atOnceUsers(Math.min(CustomFeeders.MaxNumberOfLink, 50))
       )
     ),
   )

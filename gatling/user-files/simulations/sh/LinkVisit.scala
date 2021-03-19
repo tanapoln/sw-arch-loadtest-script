@@ -70,93 +70,94 @@ class LinksFeeder extends Feeder[Option[Link]] {
 
 
 class ShortenSimulation extends Simulation {
-  val httpProto = http.baseUrl(s"http://${
-    System.getProperty("hostname", "ta.tnpl.me:9000)}")
-      .contentTypeHeader("application/json")
-      .disableFollowRedirect
+  val host = System.getProperty("hostname", "ta.tnpl.me:9000")
 
-    val uniqString = CustomFeeders.uniq()
+  val httpProto = http.baseUrl(s"http://${host}")
+    .contentTypeHeader("application/json")
+    .disableFollowRedirect
 
-    val shortenScene = scenario("shorten link")
-      .feed(uniqString)
-      .exec { session =>
-        session.set("longURL", s"http://www.google.com?q=${session("uniq").as[String]}")
-      }
-      .exec(
-        http("shorten")
-          .post("/link")
-          .body(StringBody(
-            """
-              |{
-              | "url": "${longURL}"
-              |}
-              |""".stripMargin))
-          .check(status.is(200))
-          .check(jsonPath("$.link").ofType[String].saveAs("link"))
-      )
-      .exitHereIfFailed
-      .exec { session =>
-        val link = session("link").as[String]
-        val longURL = session("longURL").as[String]
-        CustomFeeders.addLink(link, longURL)
+  val uniqString = CustomFeeders.uniq()
 
-        session
-      }
-
-    val visitScene = scenario("visit link")
-      .feed(new CircularLinksFeeder())
-      .exec { session =>
-        val l = session("data").as[Link]
-        session.set("link", l.getAndCount()) //session immutable
-          .set("longURL", l.longURL)
-      }
-      .exec { session =>
-        //      println("Setting visit link data:" + session)
-        session
-      }
-      .exec(
-        http("visit")
-          .get("${link}")
-          .disableFollowRedirect
-          .check(status.is(302))
-          .check(header("Location").is("${longURL}"))
-      )
-
-    val validateScene = scenario("validate stats")
-      .feed(new LinksFeeder())
-      .exec { session =>
-        val data = session("data").as[Option[Link]]
-        if (data.isEmpty) {
-          session.set("available", false)
-        } else {
-          val l = data.get
-          session.set("available", true)
-            .set("count", l.counter.get())
-            .set("statsURL", l.link + "/stats")
-        }
-      }
-      .doIf("${available}") {
-        exec(
-          http("stats")
-            .get("${statsURL}")
-            .check(status.is(200))
-            .check(jsonPath("$.visit").ofType[Long].is("${count}"))
-        )
-      }
-
-    setUp(
-      shortenScene.inject(
-        constantConcurrentUsers(Integer.getInteger("load.shorten", 100)) during (30 seconds)
-      ),
-      visitScene.inject(
-        constantConcurrentUsers(Integer.getInteger("load.visit", 500)) during (60 seconds)
-      ).andThen(
-        validateScene.inject(
-          constantConcurrentUsers(Integer.getInteger("load.validate", 50)) during (10 seconds)
-        )
-      ),
+  val shortenScene = scenario("shorten link")
+    .feed(uniqString)
+    .exec { session =>
+      session.set("longURL", s"http://www.google.com?q=${session("uniq").as[String]}")
+    }
+    .exec(
+      http("shorten")
+        .post("/link")
+        .body(StringBody(
+          """
+            |{
+            | "url": "${longURL}"
+            |}
+            |""".stripMargin))
+        .check(status.is(200))
+        .check(jsonPath("$.link").ofType[String].saveAs("link"))
     )
-      .protocols(httpProto)
-      .maxDuration(2 minute)
-  }
+    .exitHereIfFailed
+    .exec { session =>
+      val link = session("link").as[String]
+      val longURL = session("longURL").as[String]
+      CustomFeeders.addLink(link, longURL)
+
+      session
+    }
+
+  val visitScene = scenario("visit link")
+    .feed(new CircularLinksFeeder())
+    .exec { session =>
+      val l = session("data").as[Link]
+      session.set("link", l.getAndCount()) //session immutable
+        .set("longURL", l.longURL)
+    }
+    .exec { session =>
+      //      println("Setting visit link data:" + session)
+      session
+    }
+    .exec(
+      http("visit")
+        .get("${link}")
+        .disableFollowRedirect
+        .check(status.is(302))
+        .check(header("Location").is("${longURL}"))
+    )
+
+  val validateScene = scenario("validate stats")
+    .feed(new LinksFeeder())
+    .exec { session =>
+      val data = session("data").as[Option[Link]]
+      if (data.isEmpty) {
+        session.set("available", false)
+      } else {
+        val l = data.get
+        session.set("available", true)
+          .set("count", l.counter.get())
+          .set("statsURL", l.link + "/stats")
+      }
+    }
+    .doIf("${available}") {
+      exec(
+        http("stats")
+          .get("${statsURL}")
+          .check(status.is(200))
+          .check(jsonPath("$.visit").ofType[Long].is("${count}"))
+      )
+    }
+
+  setUp(
+    shortenScene.inject(
+      constantConcurrentUsers(Integer.getInteger("load.shorten", 5)) during (30 seconds)
+    ),
+    visitScene.inject(
+      constantConcurrentUsers(Integer.getInteger("load.visit", 10)) during (60 seconds)
+    ).andThen(
+      validateScene.inject(
+        constantConcurrentUsers(Integer.getInteger("load.validate", 2)) during (10 seconds)
+      )
+    ),
+  )
+    .protocols(httpProto)
+    .maxDuration(2 minute)
+}
 

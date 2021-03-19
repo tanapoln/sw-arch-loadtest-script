@@ -124,36 +124,36 @@ class ShortenSimulation extends Simulation {
     )
 
   val validateScene = scenario("validate stats")
-    .feed(new LinksFeeder())
-    .exec { session =>
-      val data = session("data").as[Option[Link]]
-      if (data.isEmpty) {
-        session.set("available", false)
-      } else {
-        val l = data.get
-        session.set("available", true)
-          .set("count", l.counter.get())
-          .set("statsURL", l.link + "/stats")
-      }
-    }
-    .doIf("${available}") {
-      exec(
-        http("stats")
-          .get("${statsURL}")
-          .check(status.is(200))
-          .check(jsonPath("$.visit").ofType[Long].is("${count}"))
-      )
+    .doWhile("${available}") {
+      feed(new LinksFeeder())
+        .exec { session =>
+          val data = session("data").as[Option[Link]]
+          if (data.isEmpty) {
+            session.set("available", false)
+          } else {
+            val l = data.get
+            session.set("available", true)
+              .set("count", l.counter.get())
+              .set("statsURL", l.link + "/stats")
+          }
+        }
+        .exec(
+          http("stats")
+            .get("${statsURL}")
+            .check(status.is(200))
+            .check(jsonPath("$.visit").ofType[Long].is("${count}"))
+        )
     }
 
   setUp(
     shortenScene.inject(
-      constantConcurrentUsers(Integer.getInteger("load.shorten", 5)) during (30 seconds)
+      constantConcurrentUsers(Integer.getInteger("load.shorten", 2)) during (5 seconds)
     ),
     visitScene.inject(
-      constantConcurrentUsers(Integer.getInteger("load.visit", 10)) during (60 seconds)
+      constantConcurrentUsers(Integer.getInteger("load.visit", 5)) during (10 seconds)
     ).andThen(
       validateScene.inject(
-        constantConcurrentUsers(Integer.getInteger("load.validate", 2)) during (10 seconds)
+        atOnceUsers(1)
       )
     ),
   )

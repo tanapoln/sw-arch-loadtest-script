@@ -147,10 +147,10 @@ class ShortenSimulation extends Simulation {
 
   setUp(
     shortenScene.inject(
-      constantConcurrentUsers(Integer.getInteger("load.shorten", 2)) during (5 seconds)
+      constantConcurrentUsers(Integer.getInteger("load.shorten", 2)) during (Integer.getInteger("load.shorten.duration", 5) seconds)
     ),
     visitScene.inject(
-      constantConcurrentUsers(Integer.getInteger("load.visit", 5)) during (10 seconds)
+      constantConcurrentUsers(Integer.getInteger("load.visit", 5)) during (Integer.getInteger("load.visit.duration", 10) seconds)
     ).andThen(
       validateScene.inject(
         atOnceUsers(1)

@@ -70,17 +70,18 @@ class LinksFeeder extends Feeder[Option[Link]] {
 
 
 class ShortenSimulation extends Simulation {
-  val httpProto = http.baseUrl("http://ta.tnpl.me:9000")
-    .contentTypeHeader("application/json")
-    .disableFollowRedirect
+  val httpProto = http.baseUrl(s"http://${
+    System.getProperty("hostname", "ta.tnpl.me:9000)}")
+      .contentTypeHeader("application/json")
+      .disableFollowRedirect
 
-  val uniqString = CustomFeeders.uniq()
+    val uniqString = CustomFeeders.uniq()
 
-  val shortenScene = scenario("shorten link")
-    .feed(uniqString)
-    .exec { session =>
-      session.set("longURL", s"http://www.google.com?q=${session("uniq").as[String]}")
-    }
+    val shortenScene = scenario("shorten link")
+      .feed(uniqString)
+      .exec { session =>
+        session.set("longURL", s"http://www.google.com?q=${session("uniq").as[String]}")
+      }
     .exec(
       http("shorten")
         .post("/link")

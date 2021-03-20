@@ -20,7 +20,7 @@ case class Link(val longURL: String, val link: String, val counter: AtomicLong) 
 object CustomFeeders {
   val MaxNumberOfLink = Integer.getInteger("links.max", 4)
   val count = new AtomicLong()
-  val maxLink = new AtomicLong(MaxNumberOfLink)
+  val maxLink = new AtomicLong((Long) MaxNumberOfLink)
 
   val shortenLink = new ConcurrentHashMap[String, AtomicLong]()
   val links = new ArrayBuffer[Link]()

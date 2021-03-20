@@ -92,6 +92,7 @@ class ShortenSimulation extends Simulation {
   val httpProto = http.baseUrl(s"http://${host}")
     .contentTypeHeader("application/json")
     .disableFollowRedirect
+    .disableCaching
 
   val uniqString = CustomFeeders.uniq()
 

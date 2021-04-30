@@ -106,7 +106,7 @@ class ShortenSimulation extends Simulation {
       session.set("longURL", s"http://www.google.com?q=${session("uniq").as[String]}")
     }
     .exec(
-      http(s"shorten - ${Runner.localHostname}")
+      http(s"shorten-${Runner.localHostname}")
         .post("/link")
         .body(StringBody(
           """
@@ -139,7 +139,7 @@ class ShortenSimulation extends Simulation {
           session
         }
         .exec(
-          http(s"visit - ${Runner.localHostname}")
+          http(s"visit-${Runner.localHostname}")
             .get("${link}")
             .disableFollowRedirect
             .check(status.is(302))
@@ -162,7 +162,7 @@ class ShortenSimulation extends Simulation {
           }
         }
         .exec(
-          http(s"stats - ${Runner.localHostname}")
+          http(s"stats-${Runner.localHostname}")
             .get("${statsURL}")
             .check(status.is(200))
             .check(jsonPath("$.visit").ofType[Long].is("${count}"))
